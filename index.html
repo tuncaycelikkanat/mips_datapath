@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MIPS Simülatörü (Sadece Kablo Akışı)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            background: #f0f2f5;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        header {
+            margin-top: 10px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        .container {
+            flex-grow: 1;
+            width: 95%;
+            margin: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        object {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h3>MIPS Datapath</h3>
+        <button id="btnFetch">1. Fetch</button>
+        <button id="btnDecode">2. Decode</button>
+        <button id="btnReset" style="background: #ef4444;">Sıfırla</button>
+    </header>
+
+    <div class="container">
+        <object id="svgObject" data="a.svg" type="image/svg+xml"></object>
+    </div>
+
+    <script>
+        let svgDoc = null;
+        const svgObject = document.getElementById('svgObject');
+
+        svgObject.addEventListener('load', () => {
+            svgDoc = svgObject.contentDocument;
+
+            // --- SADECE KABLOLAR İÇİN STİL ---
+            const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+            style.textContent = `
+                /* Sadece ID'si 'wire_' ile başlayanlar etkilenecek */
+                .pulse {
+                    stroke: #2196F3 !important; /* Mavi Renk */
+                    stroke-width: 4px !important;
+                    stroke-dasharray: 10, 5; /* Kesik çizgi deseni */
+                    animation: flow 0.5s linear infinite; /* Akış animasyonu */
+                    opacity: 1 !important;
+                }
+
+                @keyframes flow {
+                    to { stroke-dashoffset: -15; }
+                }
+            `;
+            svgDoc.documentElement.appendChild(style);
+            console.log("SVG Yüklendi. Sadece wire animasyonu aktif.");
+        });
+
+        function clearPulse() {
+            if (!svgDoc) return;
+            svgDoc.querySelectorAll('.pulse').forEach(el => el.classList.remove('pulse'));
+        }
+
+        function highlight(ids) {
+            if (!svgDoc) return;
+            ids.forEach(id => {
+                // SADECE 'wire_' İLE BAŞLAYANLARI SEÇİYORUZ
+                // Kutuları listeye yazsan bile bu kontrol sayesinde boyanmazlar.
+                if (!id.startsWith('wire_')) return;
+
+                const el = svgDoc.getElementById(id);
+                if (el) {
+                    el.classList.remove('pulse');
+                    void el.offsetWidth; // Reset trick
+                    el.classList.add('pulse');
+                }
+            });
+        }
+
+        // --- BUTONLAR ---
+
+        document.getElementById('btnFetch').addEventListener('click', () => {
+            clearPulse();
+            highlight([
+                // Listede kutular olsa bile kod onları filtreler, sadece wire'ları yakar.
+                'mux_PC',
+                'wire_PC_Prime',
+                'box_pc',
+                'wire_PCF',
+                'box_InstructionMemory',
+                'box_AdderPC',
+                'wire_AdderPC_Plus4',
+                'wire_PCPlus4F'
+            ]);
+        });
+
+        document.getElementById('btnDecode').addEventListener('click', () => {
+            // Fetch animasyonu devam etsin istiyorsan clearPulse'ı kaldır.
+            // clearPulse(); 
+
+            highlight([
+                'box_IF_ID_Register',
+                'wire_InstrF',
+                'wire_InstrD',
+                'box_RegisterFile'
+            ]);
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            clearPulse();
+        });
+
+    </script>
+</body>
+
+</html>
