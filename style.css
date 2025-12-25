@@ -1,20 +1,22 @@
-/* --- TEMEL AYARLAR --- */
+/* =========================================
+   1. TEMEL AYARLAR & RESET
+   ========================================= */
 body {
     margin: 0;
+    padding: 0;
     background: #f8fafc;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     height: 100vh;
-    /* Yükseklik %100 */
     width: 100vw;
-    /* Genişlik %100 */
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* Sayfa kaydırmayı kapat */
     color: #475569;
 }
 
-/* --- ÇİZİM ALANI --- */
+/* =========================================
+   2. ÇİZİM ALANI (VIEWPORT)
+   ========================================= */
 .viewport {
     flex-grow: 1;
     position: relative;
@@ -22,9 +24,7 @@ body {
     background-color: #f1f5f9;
     cursor: grab;
     background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-    background-size: 20px 20px;
-
-    /* MOBİL İÇİN ÇOK ÖNEMLİ: Tarayıcının kendi kaydırmasını kapatır */
+    background-size: 24px 24px;
     touch-action: none;
 }
 
@@ -48,48 +48,104 @@ object {
     display: block;
 }
 
-/* --- KONTROL PANELİ --- */
+/* =========================================
+   3. KONTROL PANELİ (ADACIK TASARIMI)
+   ========================================= */
 .control-panel {
     position: fixed;
+    /* Panelin alt kenardan ne kadar yukarıda duracağı */
     bottom: 30px;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(0);
 
     width: auto;
     min-width: 600px;
-    /* PC için minimum genişlik */
     max-width: 90%;
 
     background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
 
-    padding: 15px 25px;
+    padding: 20px 25px;
     border-radius: 24px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-    /* Gölgeyi artırdım */
-    border: 1px solid #ffffff;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5);
 
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 15px;
     z-index: 200;
+
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
+/* --- DÜZELTİLEN KISIM BURASI --- */
+.control-panel.minimized {
+    /* 130% yerine 100% yaptık. Böylece panel tam boyu kadar aşağı iner.
+       bottom: 30px olduğu için buton tam olarak alttan görünür kalır. */
+    transform: translateX(-50%) translateY(100%);
+}
+
+/* --- GİZLEME/AÇMA DÜĞMESİ (HANDLE) --- */
+.toggle-handle {
+    position: absolute;
+    top: -36px;
+    /* Butonu biraz daha yukarı aldım, parmak rahat dokunsun */
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 80px;
+    /* Genişliği artırdım, ıskalamamak için */
+    height: 36px;
+    /* Yüksekliği artırdım */
+
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+
+    cursor: pointer;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    z-index: 201;
+    /* Panelin üstünde kalsın */
+}
+
+.toggle-handle:hover {
+    background: #fff;
+    color: #0ea5e9;
+    top: -40px;
+    /* Hover'da hafif yükselsin */
+}
+
+.control-panel.minimized .toggle-handle {
+    background: #0ea5e9;
+    color: white;
+    box-shadow: 0 -5px 20px rgba(14, 165, 233, 0.4);
+}
+
+/* --- PANEL İÇERİĞİ --- */
 .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
 }
 
 .status-badge {
     background: #f1f5f9;
     color: #64748b;
-    padding: 4px 12px;
+    padding: 6px 14px;
     border-radius: 20px;
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 .status-badge span {
@@ -97,12 +153,12 @@ object {
 }
 
 .example-code {
-    font-family: monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     color: #64748b;
     font-size: 0.9rem;
     background: #f8fafc;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
     border: 1px solid #e2e8f0;
 }
 
@@ -116,24 +172,32 @@ select {
     background: #f8fafc;
     color: #334155;
     border: 1px solid #cbd5e1;
-    padding: 10px 14px;
-    border-radius: 12px;
+    padding: 12px 16px;
+    border-radius: 14px;
     font-size: 0.95rem;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
+    outline: none;
     flex-grow: 1;
+    transition: border-color 0.2s;
+}
+
+select:hover {
+    border-color: #94a3b8;
 }
 
 .btn {
-    padding: 10px 24px;
+    padding: 12px 24px;
     border: none;
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: 600;
     cursor: pointer;
     font-size: 0.95rem;
     transition: all 0.2s;
-    /* Mobilde dokunmatik alanı büyüt */
-    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
 }
 
 .btn-nav {
@@ -143,7 +207,7 @@ select {
 
 .btn-nav:hover:not(:disabled) {
     background: #bae6fd;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
 }
 
 .btn-reset {
@@ -161,83 +225,89 @@ select {
     filter: grayscale(100%);
 }
 
+.btn:active {
+    transform: scale(0.96);
+}
+
 /* --- ZOOM BUTONLARI --- */
 .zoom-controls {
     position: absolute;
     bottom: 40px;
-    /* Panel ile çakışmasın diye */
-    right: 30px;
+    right: 40px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     z-index: 100;
 }
 
 .zoom-btn {
     width: 48px;
     height: 48px;
-    /* Mobilde parmak sığsın diye büyüttüm */
-    border-radius: 14px;
+    border-radius: 16px;
     background: white;
     border: 1px solid #e2e8f0;
     color: #475569;
     font-size: 1.4rem;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s;
+}
+
+.zoom-btn:hover {
+    background: #f8fafc;
+    color: #0ea5e9;
+    transform: scale(1.05);
 }
 
 .zoom-btn:active {
-    background: #f1f5f9;
     transform: scale(0.95);
 }
 
-/* --- MOBİL UYUMLULUK (Responsive) --- */
+/* --- MOBİL UYUMLULUK --- */
 @media (max-width: 768px) {
     .control-panel {
         min-width: unset;
-        /* Genişlik sınırını kaldır */
-        width: 92%;
-        /* Ekranın %92'sini kapla */
-        bottom: 20px;
+        width: 90%;
+        bottom: 25px;
+        /* Mobilde alt boşluk */
         padding: 15px;
+    }
+
+    /* Mobilde panel aşağı inince, ekranın en altına sıfırlansın diye */
+    .control-panel.minimized {
+        /* Biraz daha az indiriyoruz ki güvenli alanda kalsın */
+        transform: translateX(-50%) translateY(100%);
     }
 
     .panel-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 8px;
+        gap: 10px;
     }
 
     .example-code {
-        font-size: 0.8rem;
         width: 100%;
         box-sizing: border-box;
     }
 
     .panel-actions {
         flex-wrap: wrap;
-        /* Sığmazsa alt satıra geç */
     }
 
     select {
         width: 100%;
-        /* Tam satır kapla */
     }
 
     .btn {
         flex-grow: 1;
-        /* Butonlar alanı paylaşsın */
-        padding: 12px;
     }
 
     .zoom-controls {
         bottom: auto;
-        /* Alttan hizalamayı kaldır */
         top: 20px;
-        /* Üste al (Panelin üstüne binmesin diye) */
         right: 20px;
     }
 }
