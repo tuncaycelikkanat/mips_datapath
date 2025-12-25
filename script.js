@@ -1,5 +1,5 @@
 /* =================================================================
-   1. MIPS VERİTABANI (LOGIC)
+   1. MIPS VERİTABANI
    ================================================================= */
 const MIPS_LOGIC = {
     "ADD": {
@@ -32,7 +32,7 @@ let currentInstruction = "";
 let svgDoc = null;
 
 // =================================================================
-// 2. PAN & ZOOM MEKANİĞİ (BARİYER EKLENDİ)
+// 2. PAN & ZOOM MEKANİĞİ (MOUSE + TOUCH)
 // =================================================================
 const container = document.getElementById('pan-zoom-container');
 const viewport = document.getElementById('viewport');
@@ -44,18 +44,37 @@ let isPanning = false;
 let startX = 0;
 let startY = 0;
 
-// Transform işlemini uygula
 function setTransform() {
     container.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
 }
 
-// Başlangıçta ortala
-window.onload = () => fitView();
+// --- ORTAK HESAPLAMA FONKSİYONU ---
+function calculatePan(clientX, clientY) {
+    // 1. Yeni aday koordinatları
+    let newX = clientX - startX;
+    let newY = clientY - startY;
 
-// --- Mouse Sürükleme ---
+    // 2. BARİYER HESABI
+    const imgWidth = 1920 * scale;
+    const imgHeight = 1080 * scale;
+    const viewWidth = viewport.offsetWidth;
+    const viewHeight = viewport.offsetHeight;
+    const margin = 100;
+
+    const minX = 100 - imgWidth;
+    const maxX = viewWidth - 100;
+    const minY = 100 - imgHeight;
+    const maxY = viewHeight - 100;
+
+    pointX = Math.min(Math.max(newX, minX), maxX);
+    pointY = Math.min(Math.max(newY, minY), maxY);
+
+    setTransform();
+}
+
+// --- MOUSE OLAYLARI (PC) ---
 viewport.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    // Mevcut konum ile mouse konumu arasındaki farkı al
     startX = e.clientX - pointX;
     startY = e.clientY - pointY;
     isPanning = true;
@@ -65,42 +84,31 @@ viewport.addEventListener('mousedown', (e) => {
 window.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     e.preventDefault();
-
-    // 1. Yeni aday koordinatları hesapla
-    let newX = e.clientX - startX;
-    let newY = e.clientY - startY;
-
-    // 2. BARİYER HESABI (Clamping)
-    // Şeklin o anki boyutlarını hesapla
-    const imgWidth = 1920 * scale;
-    const imgHeight = 1080 * scale;
-    const viewWidth = viewport.offsetWidth;
-    const viewHeight = viewport.offsetHeight;
-
-    // Kenar payı (Şekil en az 100px içeride kalsın)
-    const margin = 100;
-
-    // X Ekseni Sınırları:
-    // Sol sınır: Şeklin sağ ucu (newX + imgWidth), ekranın solundan (100) girmemeli.
-    // Sağ sınır: Şeklin sol ucu (newX), ekranın sağından (viewWidth - 100) çıkmamalı.
-    const minX = 100 - imgWidth;
-    const maxX = viewWidth - 100;
-
-    // Y Ekseni Sınırları:
-    const minY = 100 - imgHeight;
-    const maxY = viewHeight - 100;
-
-    // Koordinatları sınırlara hapset
-    pointX = Math.min(Math.max(newX, minX), maxX);
-    pointY = Math.min(Math.max(newY, minY), maxY);
-
-    setTransform();
+    calculatePan(e.clientX, e.clientY);
 });
 
 window.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = "grab"; });
-window.addEventListener('mouseleave', () => { isPanning = false; });
 
-// --- Mouse Tekerlek Zoom ---
+// --- TOUCH OLAYLARI (MOBİL) ---
+viewport.addEventListener('touchstart', (e) => {
+    // Sadece tek parmakla dokunuyorsa sürükle
+    if (e.touches.length === 1) {
+        startX = e.touches[0].clientX - pointX;
+        startY = e.touches[0].clientY - pointY;
+        isPanning = true;
+    }
+}, { passive: false });
+
+window.addEventListener('touchmove', (e) => {
+    if (!isPanning) return;
+    e.preventDefault(); // Sayfanın kaymasını engelle
+    calculatePan(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+
+window.addEventListener('touchend', () => { isPanning = false; });
+
+
+// --- MOUSE WHEEL ZOOM ---
 viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomIntensity = 0.1;
@@ -109,7 +117,7 @@ viewport.addEventListener('wheel', (e) => {
 
     const oldScale = scale;
     let newScale = scale * factor;
-    newScale = Math.max(0.1, Math.min(newScale, 5)); // Min ve Max zoom sınırı
+    newScale = Math.max(0.1, Math.min(newScale, 5));
 
     const mouseX = (e.clientX - pointX) / oldScale;
     const mouseY = (e.clientY - pointY) / oldScale;
@@ -119,14 +127,17 @@ viewport.addEventListener('wheel', (e) => {
 
     scale = newScale;
     setTransform();
-});
+}, { passive: false });
 
 // Zoom Butonları
 function zoomIn() { scale *= 1.2; setTransform(); }
 function zoomOut() { scale /= 1.2; setTransform(); }
 function fitView() {
-    scale = 0.6;
-    const vw = viewport.offsetWidth;  // window yerine viewport kullandım daha sağlıklı
+    scale = Math.min(window.innerWidth / 2000, window.innerHeight / 1200);
+    // Mobilde çok küçülmemesi için minimum scale
+    if (window.innerWidth < 768) scale = Math.max(scale, 0.3);
+
+    const vw = viewport.offsetWidth;
     const vh = viewport.offsetHeight;
     pointX = (vw - 1920 * scale) / 2;
     pointY = (vh - 1080 * scale) / 2;
@@ -139,6 +150,7 @@ document.getElementById('btnZoomIn').onclick = zoomIn;
 document.getElementById('btnZoomOut').onclick = zoomOut;
 
 window.addEventListener('resize', fitView);
+window.addEventListener('load', fitView);
 
 
 // =================================================================
@@ -149,7 +161,6 @@ const svgObject = document.getElementById('svgObject');
 svgObject.addEventListener('load', () => {
     svgDoc = svgObject.contentDocument;
 
-    // Stil Ekleme
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = `
         .active-wire {
@@ -163,7 +174,6 @@ svgObject.addEventListener('load', () => {
         @keyframes flow { to { stroke-dashoffset: -25; } }
     `;
     svgDoc.documentElement.appendChild(style);
-    console.log("SVG Yüklendi ve Hazır.");
 });
 
 function updateSim() {
