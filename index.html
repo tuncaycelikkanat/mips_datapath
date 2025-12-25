@@ -3,294 +3,52 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>MIPS Sistematik Simülatör</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        /* --- GENEL TASARIM --- */
-        body {
-            margin: 0;
-            background: #e2e8f0;
-            font-family: 'Segoe UI', sans-serif;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+    <title>MIPS Pro Simülatör</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-        /* Üst Panel */
-        header {
-            background: #1e293b;
-            color: white;
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        select {
-            padding: 8px 12px;
-            border-radius: 4px;
-            border: none;
-            font-weight: bold;
-            background: #334155;
-            color: white;
-            cursor: pointer;
-        }
-
-        button {
-            padding: 8px 20px;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-            color: white;
-        }
-
-        .btn-prev {
-            background: #64748b;
-        }
-
-        .btn-next {
-            background: #3b82f6;
-        }
-
-        .btn-reset {
-            background: #ef4444;
-        }
-
-        button:hover {
-            filter: brightness(1.1);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Durum Göstergesi */
-        .status-panel {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #fbbf24;
-        }
-
-        /* SVG Alanı */
-        .container {
-            flex-grow: 1;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-        }
-
-        object {
-            width: 100%;
-            height: 100%;
-            display: block;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <header>
-        <div class="status-panel">
-            MIPS <span id="currentInstText">--</span> | Aşama: <span id="currentStageText">Hazır</span>
+    <div class="viewport" id="viewport">
+        <div id="pan-zoom-container">
+            <object id="svgObject" data="a.svg" type="image/svg+xml"></object>
         </div>
 
-        <div class="controls">
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="btnFit" title="Ekrana Sığdır">⛶</button>
+            <button class="zoom-btn" id="btnZoomIn" title="Yakınlaştır">+</button>
+            <button class="zoom-btn" id="btnZoomOut" title="Uzaklaştır">-</button>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="panel-header">
+            <div class="status-badge">
+                AŞAMA: <span id="currentStageText">HAZIR</span>
+            </div>
+            <div class="example-code" id="codeExample">
+                Seçim Bekleniyor...
+            </div>
+        </div>
+
+        <div class="panel-actions">
             <select id="instructionSelect">
                 <option value="" disabled selected>Komut Seçiniz</option>
                 <option value="ADD">ADD (Toplama)</option>
-                <option value="LW">LW (Load Word)</option>
-                <option value="SW">SW (Store Word)</option>
-                <option value="BEQ">BEQ (Branch)</option>
+                <option value="LW">LW (Yükle)</option>
+                <option value="SW">SW (Kaydet)</option>
+                <option value="BEQ">BEQ (Dallanma)</option>
             </select>
 
-            <button class="btn-prev" id="btnPrev" disabled>❮ Geri</button>
-            <button class="btn-next" id="btnNext" disabled>İleri ❯</button>
-            <button class="btn-reset" id="btnReset">Sıfırla</button>
+            <button class="btn btn-nav" id="btnPrev" disabled>❮</button>
+            <button class="btn btn-nav" id="btnNext" disabled>İleri ❯</button>
+            <button class="btn btn-reset" id="btnReset">Sıfırla</button>
         </div>
-    </header>
-
-    <div class="container">
-        <object id="svgObject" data="a.svg" type="image/svg+xml"></object>
     </div>
 
-    <script>
-        /* =================================================================
-           ⚠️ DÜZENLEME ALANI: KABLO ID'LERİNİ BURAYA GİRECEKSİN ⚠️
-           =================================================================
-           Aşağıdaki listede her komutun (ADD, LW...) her aşaması (IF, ID...)
-           için hangi kabloların yanacağını belirtiyoruz. 
-           Senin SVG dosyanı açıp ID'lere bakarak burayı doldurman lazım.
-        */
-
-        const MIPS_LOGIC = {
-            "ADD": {
-                // 1. Fetch Aşaması (Her komutta aynıdır genelde)
-                "IF": ["wire_PC_Prime", "wire_PCF", "wire_AdderPC_Plus4", "wire_PCPlus4F"],
-                // 2. Decode Aşaması
-                "ID": ["wire_InstrF", "wire_InstrD"],
-                // 3. Execute Aşaması (BURALARI SENİN ID'LERLE DOLDURMAN LAZIM)
-                "EX": ["wire_ALU_SrcA", "wire_ALU_Result"],
-                // 4. Memory Aşaması (ADD için boştur genelde ama kablo varsa ekle)
-                "MEM": [],
-                // 5. Write Back Aşaması
-                "WB": ["wire_WriteData", "wire_Result_to_Reg"]
-            },
-
-            "LW": {
-                "IF": ["wire_PC_Prime", "wire_PCF", "wire_AdderPC_Plus4", "wire_PCPlus4F"],
-                "ID": ["wire_InstrF", "wire_InstrD"],
-                "EX": ["wire_ALU_Result"], // Örnek
-                "MEM": ["wire_MemRead"],   // Örnek
-                "WB": ["wire_MemToReg"]    // Örnek
-            },
-
-            // Diğer komutları (SW, BEQ) buraya ekleyebilirsin...
-            "SW": { "IF": [], "ID": [], "EX": [], "MEM": [], "WB": [] },
-            "BEQ": { "IF": [], "ID": [], "EX": [], "MEM": [], "WB": [] }
-        };
-
-        // Aşamaların Sırası
-        const STAGES = ["IF", "ID", "EX", "MEM", "WB"];
-        const STAGE_NAMES = {
-            "IF": "Instruction Fetch",
-            "ID": "Instruction Decode",
-            "EX": "Execute",
-            "MEM": "Memory Access",
-            "WB": "Write Back"
-        };
-
-        // --- DEĞİŞKENLER ---
-        let currentStageIndex = -1;
-        let currentInstructionKey = "";
-        let svgDoc = null;
-
-        const svgObject = document.getElementById('svgObject');
-        const btnNext = document.getElementById('btnNext');
-        const btnPrev = document.getElementById('btnPrev');
-        const selectInst = document.getElementById('instructionSelect');
-        const txtInst = document.getElementById('currentInstText');
-        const txtStage = document.getElementById('currentStageText');
-
-        // --- SVG YÜKLENİNCE STİLİ BAS ---
-        svgObject.addEventListener('load', () => {
-            svgDoc = svgObject.contentDocument;
-
-            // Veri Akışı Animasyon Stili (Daha Sistematik)
-            const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
-            style.textContent = `
-                /* Veri Akış Animasyonu */
-                .data-flow {
-                    stroke: #3b82f6 !important; /* Canlı Mavi */
-                    stroke-width: 5px !important;
-                    stroke-dasharray: 12, 12; /* 12px dolu, 12px boş (Paket gibi) */
-                    stroke-linecap: round;    /* Uçları yuvarlak */
-                    animation: flowAnim 0.8s linear infinite;
-                    opacity: 1 !important;
-                }
-
-                @keyframes flowAnim {
-                    to { stroke-dashoffset: -24; }
-                }
-            `;
-            svgDoc.documentElement.appendChild(style);
-        });
-
-        // --- YARDIMCI FONKSİYONLAR ---
-
-        function updateSimulation() {
-            if (!svgDoc) return;
-
-            // 1. Önceki tüm animasyonları temizle
-            svgDoc.querySelectorAll('.data-flow').forEach(el => el.classList.remove('data-flow'));
-
-            // Eğer başa döndüysek çık
-            if (currentStageIndex === -1) {
-                txtStage.textContent = "Hazır";
-                return;
-            }
-
-            // 2. Mevcut aşamanın adını al (IF, ID vs.)
-            const stageKey = STAGES[currentStageIndex];
-            txtStage.textContent = STAGE_NAMES[stageKey];
-
-            // 3. Veritabanından o aşamanın kablolarını bul
-            const wiresToActivate = MIPS_LOGIC[currentInstructionKey][stageKey];
-
-            // 4. Sadece bu kabloları boya
-            if (wiresToActivate) {
-                wiresToActivate.forEach(id => {
-                    // ID "wire_" ile başlıyorsa animasyon ekle (Boxları korumak için)
-                    if (id.startsWith('wire_')) {
-                        const el = svgDoc.getElementById(id);
-                        if (el) el.classList.add('data-flow');
-                        else console.warn(`ID Bulunamadı: ${id}`);
-                    }
-                });
-            }
-        }
-
-        // --- ETKİLEŞİM ---
-
-        selectInst.addEventListener('change', (e) => {
-            currentInstructionKey = e.target.value;
-            currentStageIndex = -1;
-            txtInst.textContent = currentInstructionKey;
-
-            // Butonları aç
-            btnNext.disabled = false;
-            btnPrev.disabled = true;
-
-            updateSimulation();
-        });
-
-        btnNext.addEventListener('click', () => {
-            if (currentStageIndex < STAGES.length - 1) {
-                currentStageIndex++;
-                btnPrev.disabled = false;
-                updateSimulation();
-            }
-            if (currentStageIndex === STAGES.length - 1) {
-                btnNext.disabled = true; // Son aşamada ileri butonunu kapa
-            }
-        });
-
-        btnPrev.addEventListener('click', () => {
-            if (currentStageIndex > 0) {
-                currentStageIndex--;
-                btnNext.disabled = false;
-                updateSimulation();
-            } else if (currentStageIndex === 0) {
-                currentStageIndex = -1;
-                btnPrev.disabled = true;
-                updateSimulation();
-            }
-        });
-
-        document.getElementById('btnReset').addEventListener('click', () => {
-            currentStageIndex = -1;
-            selectInst.value = "";
-            txtInst.textContent = "--";
-            btnNext.disabled = true;
-            btnPrev.disabled = true;
-            updateSimulation();
-        });
-
-    </script>
+    <script src="script.js" defer></script>
 </body>
 
 </html>
