@@ -32,7 +32,7 @@ let currentInstruction = "";
 let svgDoc = null;
 
 // =================================================================
-// 2. PAN & ZOOM MEKANİĞİ (MOUSE + TOUCH)
+// 2. PAN & ZOOM MEKANİĞİ (PINCH ZOOM DAHİL)
 // =================================================================
 const container = document.getElementById('pan-zoom-container');
 const viewport = document.getElementById('viewport');
@@ -44,32 +44,38 @@ let isPanning = false;
 let startX = 0;
 let startY = 0;
 
+// Pinch Zoom için Değişkenler
+let initialPinchDistance = null;
+let lastScale = 1;
+
 function setTransform() {
     container.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
 }
 
-// --- ORTAK HESAPLAMA FONKSİYONU ---
-function calculatePan(clientX, clientY) {
-    // 1. Yeni aday koordinatları
-    let newX = clientX - startX;
-    let newY = clientY - startY;
-
-    // 2. BARİYER HESABI
+// Bariyer Fonksiyonu (Dışarı taşmayı engeller)
+function clampPosition(newX, newY) {
     const imgWidth = 1920 * scale;
     const imgHeight = 1080 * scale;
     const viewWidth = viewport.offsetWidth;
     const viewHeight = viewport.offsetHeight;
+
+    // Kenar payı
     const margin = 100;
 
-    const minX = 100 - imgWidth;
-    const maxX = viewWidth - 100;
-    const minY = 100 - imgHeight;
-    const maxY = viewHeight - 100;
+    const minX = margin - imgWidth;
+    const maxX = viewWidth - margin;
+    const minY = margin - imgHeight;
+    const maxY = viewHeight - margin;
 
     pointX = Math.min(Math.max(newX, minX), maxX);
     pointY = Math.min(Math.max(newY, minY), maxY);
+}
 
-    setTransform();
+// İki parmak arası mesafeyi hesapla
+function getPinchDistance(touches) {
+    const touch1 = touches[0];
+    const touch2 = touches[1];
+    return Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 }
 
 // --- MOUSE OLAYLARI (PC) ---
@@ -84,31 +90,65 @@ viewport.addEventListener('mousedown', (e) => {
 window.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     e.preventDefault();
-    calculatePan(e.clientX, e.clientY);
+    clampPosition(e.clientX - startX, e.clientY - startY);
+    setTransform();
 });
 
 window.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = "grab"; });
 
-// --- TOUCH OLAYLARI (MOBİL) ---
+
+// --- TOUCH OLAYLARI (MOBİL - PAN & PINCH) ---
+
 viewport.addEventListener('touchstart', (e) => {
-    // Sadece tek parmakla dokunuyorsa sürükle
+    // 1. Tek parmak: Kaydırma (Pan) başlat
     if (e.touches.length === 1) {
         startX = e.touches[0].clientX - pointX;
         startY = e.touches[0].clientY - pointY;
         isPanning = true;
     }
+    // 2. İki parmak: Pinch Zoom başlat
+    else if (e.touches.length === 2) {
+        isPanning = false; // Pinch yaparken pan yapmasın
+        initialPinchDistance = getPinchDistance(e.touches);
+        lastScale = scale; // O anki scale'i hatırla
+    }
 }, { passive: false });
 
-window.addEventListener('touchmove', (e) => {
-    if (!isPanning) return;
-    e.preventDefault(); // Sayfanın kaymasını engelle
-    calculatePan(e.touches[0].clientX, e.touches[0].clientY);
+viewport.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // Sayfa kaymasını engelle
+
+    // 1. Tek parmak: Kaydırma
+    if (e.touches.length === 1 && isPanning) {
+        clampPosition(e.touches[0].clientX - startX, e.touches[0].clientY - startY);
+        setTransform();
+    }
+    // 2. İki parmak: Pinch Zoom
+    else if (e.touches.length === 2 && initialPinchDistance) {
+        const currentDistance = getPinchDistance(e.touches);
+
+        // Yeni scale = (Şu anki Mesafe / Başlangıç Mesafesi) * Başlangıç Scale'i
+        let newScale = (currentDistance / initialPinchDistance) * lastScale;
+
+        // Sınırla (Min 0.2x, Max 5x)
+        newScale = Math.max(0.2, Math.min(newScale, 5));
+
+        scale = newScale;
+        setTransform();
+    }
 }, { passive: false });
 
-window.addEventListener('touchend', () => { isPanning = false; });
+viewport.addEventListener('touchend', (e) => {
+    // Eğer parmaklardan biri kalkarsa işlemi bitir
+    if (e.touches.length < 2) {
+        initialPinchDistance = null;
+    }
+    if (e.touches.length === 0) {
+        isPanning = false;
+    }
+});
 
 
-// --- MOUSE WHEEL ZOOM ---
+// --- MOUSE WHEEL ZOOM (PC) ---
 viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomIntensity = 0.1;
@@ -129,13 +169,12 @@ viewport.addEventListener('wheel', (e) => {
     setTransform();
 }, { passive: false });
 
-// Zoom Butonları
+// --- ZOOM BUTONLARI ---
 function zoomIn() { scale *= 1.2; setTransform(); }
 function zoomOut() { scale /= 1.2; setTransform(); }
 function fitView() {
     scale = Math.min(window.innerWidth / 2000, window.innerHeight / 1200);
-    // Mobilde çok küçülmemesi için minimum scale
-    if (window.innerWidth < 768) scale = Math.max(scale, 0.3);
+    if (window.innerWidth < 768) scale = Math.max(scale, 0.4); // Mobilde çok küçülmesin
 
     const vw = viewport.offsetWidth;
     const vh = viewport.offsetHeight;
@@ -144,7 +183,6 @@ function fitView() {
     setTransform();
 }
 
-// Butonlara Event Ekleme
 document.getElementById('btnFit').onclick = fitView;
 document.getElementById('btnZoomIn').onclick = zoomIn;
 document.getElementById('btnZoomOut').onclick = zoomOut;
@@ -154,7 +192,7 @@ window.addEventListener('load', fitView);
 
 
 // =================================================================
-// 3. SİMÜLASYON MANTIĞI
+// 3. SİMÜLASYON YÖNETİMİ
 // =================================================================
 const svgObject = document.getElementById('svgObject');
 
@@ -164,7 +202,7 @@ svgObject.addEventListener('load', () => {
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = `
         .active-wire {
-            stroke: #0ea5e9 !important; /* Mavi */
+            stroke: #0ea5e9 !important; /* Sky Blue */
             stroke-width: 5px !important;
             stroke-dasharray: 15, 10;
             stroke-linecap: round;
@@ -174,6 +212,7 @@ svgObject.addEventListener('load', () => {
         @keyframes flow { to { stroke-dashoffset: -25; } }
     `;
     svgDoc.documentElement.appendChild(style);
+    console.log("SVG Yüklendi ve Hazır.");
 });
 
 function updateSim() {
@@ -206,7 +245,6 @@ function updateSim() {
     }
 }
 
-// Kontrol Butonları
 const btnNext = document.getElementById('btnNext');
 const btnPrev = document.getElementById('btnPrev');
 const selInst = document.getElementById('instructionSelect');
