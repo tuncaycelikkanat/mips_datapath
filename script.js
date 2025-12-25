@@ -1,13 +1,13 @@
 /* =================================================================
-   1. MIPS VERİTABANI (SİMÜLASYON LOGIC)
+   1. MIPS VERİTABANI (SIMULATION LOGIC)
    ================================================================= */
 const MIPS_LOGIC = {
     "ADD": {
         stages: {
             "IF": ["mux_PC", "wire_PC_Prime", "box_PC", "wire_PCF", "box_InstructionMemory", "box_AdderPC", "wire_AdderPC_Plus4", "wire_PCPlus4F"],
             "ID": ["wire_InstrF", "box_IF_ID_Register", "wire_InstrD", "Vector 2", "box_RegisterFile", "label_RF_A1", "label_RF_A2"],
-            "EX": ["box_ID_EX_Register", "box_ALU", "wire_ALU_SrcA", "wire_ALU_SrcB", "wire_ALU_Result"],
-            "MEM": ["box_EX_MEM_Register", "wire_MemResult_Pass"],
+            "EX": ["box_ID_EX_Register", "box_ALU", "wire_ALU_SrcA", "wire_ALU_SrcB", "wire_ALU_Result"], 
+            "MEM": ["box_EX_MEM_Register", "wire_MemResult_Pass"], 
             "WB": ["box_MEM_WB_Register", "mux_WriteBack", "wire_Result_to_Reg", "box_RegisterFile"]
         },
         example: "ADD $t0, $t1, $t2"
@@ -31,48 +31,50 @@ let currentStageIndex = -1;
 let currentInstruction = "";
 let svgDoc = null;
 
-// =================================================================
-// 2. PAN & ZOOM MEKANİĞİ (BARİYER, PINCH, MOUSE WHEEL)
-// =================================================================
+
+/* =================================================================
+   2. GELİŞMİŞ PAN & ZOOM MEKANİĞİ (FOCAL POINT ZOOM)
+   ================================================================= */
 const container = document.getElementById('pan-zoom-container');
 const viewport = document.getElementById('viewport');
 
 let scale = 0.6;
 let pointX = 0;
 let pointY = 0;
+
+// Hareket ve Zoom için değişkenler
 let isPanning = false;
 let startX = 0;
 let startY = 0;
 
-// Pinch Zoom Değişkenleri
-let initialPinchDistance = null;
-let lastScale = 1;
+// Pinch Zoom (Odaklı) Değişkenleri
+let initialPinchDistance = 0;
+let initialScale = 1;
+let pinchCenterImageX = 0; // Zoom başladığında parmakların resim üzerindeki yeri (X)
+let pinchCenterImageY = 0; // Zoom başladığında parmakların resim üzerindeki yeri (Y)
 
 function setTransform() {
     container.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
 }
 
-// BARİYER FONKSİYONU (Clamp)
-// Görüntünün ekran dışına tamamen çıkmasını engeller
-function clampPosition(newX, newY) {
+// BARİYER (Sınırlandırma)
+function clampPosition() {
     const imgWidth = 1920 * scale;
     const imgHeight = 1080 * scale;
     const viewWidth = viewport.offsetWidth;
     const viewHeight = viewport.offsetHeight;
-
-    // Kenardan en az 100px içeride kalsın
-    const margin = 100;
+    const margin = 100; // Kenar payı
 
     const minX = margin - imgWidth;
     const maxX = viewWidth - margin;
     const minY = margin - imgHeight;
     const maxY = viewHeight - margin;
 
-    pointX = Math.min(Math.max(newX, minX), maxX);
-    pointY = Math.min(Math.max(newY, minY), maxY);
+    pointX = Math.min(Math.max(pointX, minX), maxX);
+    pointY = Math.min(Math.max(pointY, minY), maxY);
 }
 
-// İki parmak arası mesafe hesaplama
+// İki parmak arası mesafe
 function getPinchDistance(touches) {
     return Math.hypot(
         touches[0].clientX - touches[1].clientX,
@@ -80,7 +82,16 @@ function getPinchDistance(touches) {
     );
 }
 
-// --- MOUSE SÜRÜKLEME ---
+// İki parmağın orta noktası (Ekran koordinatı)
+function getMidpoint(touches) {
+    return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+    };
+}
+
+
+/* --- MOUSE EVENTS (PC) --- */
 viewport.addEventListener('mousedown', (e) => {
     e.preventDefault();
     startX = e.clientX - pointX;
@@ -92,84 +103,145 @@ viewport.addEventListener('mousedown', (e) => {
 window.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     e.preventDefault();
-    clampPosition(e.clientX - startX, e.clientY - startY);
+    pointX = e.clientX - startX;
+    pointY = e.clientY - startY;
+    clampPosition();
     setTransform();
 });
 
 window.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = "grab"; });
 
-// --- DOKUNMATİK SÜRÜKLEME & PINCH (MOBİL) ---
+
+/* --- TOUCH EVENTS (MOBİL - FOCAL ZOOM) --- */
 viewport.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
-        // Tek parmak: Pan
+        // Tek parmak: Normal Kaydırma (Pan)
         startX = e.touches[0].clientX - pointX;
         startY = e.touches[0].clientY - pointY;
         isPanning = true;
-    } else if (e.touches.length === 2) {
-        // İki parmak: Pinch Zoom
-        isPanning = false;
+    } 
+    else if (e.touches.length === 2) {
+        // İki parmak: Pinch Zoom Başlangıcı
+        isPanning = false; // Pan'ı durdur
+        
         initialPinchDistance = getPinchDistance(e.touches);
-        lastScale = scale;
+        initialScale = scale;
+
+        // Parmakların orta noktasını bul
+        const mid = getMidpoint(e.touches);
+
+        // ÖNEMLİ: Orta noktanın, resim üzerindeki "orijinal" (scale edilmemiş) yerini hesapla
+        // Formül: (EkranMousu - ResimKayması) / ŞuAnkiScale
+        pinchCenterImageX = (mid.x - pointX) / scale;
+        pinchCenterImageY = (mid.y - pointY) / scale;
     }
 }, { passive: false });
 
 viewport.addEventListener('touchmove', (e) => {
-    e.preventDefault(); // Sayfa kaymasını engelle
+    e.preventDefault(); 
 
+    // 1. Tek Parmak: Kaydırma
     if (e.touches.length === 1 && isPanning) {
-        clampPosition(e.touches[0].clientX - startX, e.touches[0].clientY - startY);
+        pointX = e.touches[0].clientX - startX;
+        pointY = e.touches[0].clientY - startY;
+        clampPosition();
         setTransform();
-    } else if (e.touches.length === 2 && initialPinchDistance) {
-        const currentDist = getPinchDistance(e.touches);
-        // Yeni scale = (Şu anki / Başlangıç) * Eski Scale
-        let newScale = (currentDist / initialPinchDistance) * lastScale;
-        newScale = Math.max(0.2, Math.min(newScale, 5)); // Sınırla
+    }
+    // 2. İki Parmak: Odaklı Zoom
+    else if (e.touches.length === 2 && initialPinchDistance > 0) {
+        const currentDistance = getPinchDistance(e.touches);
+        
+        // Yeni scale hesapla
+        let newScale = (currentDistance / initialPinchDistance) * initialScale;
+        newScale = Math.max(0.2, Math.min(newScale, 5)); // Sınırlar
+
+        // Şu anki parmakların orta noktasını al (parmaklar kaymış olabilir)
+        const mid = getMidpoint(e.touches);
+
+        // YENİ KONUM HESABI (Odaklama Büyüsü Burada)
+        // Mantık: Resimdeki o nokta (pinchCenterImage), yeni scale ile çarpılıp,
+        // tekrar parmakların ortasına (mid) denk gelecek şekilde pointX/Y kaydırılır.
+        pointX = mid.x - (pinchCenterImageX * newScale);
+        pointY = mid.y - (pinchCenterImageY * newScale);
+
         scale = newScale;
+        
+        clampPosition(); // Dışarı taşmayı engelle
         setTransform();
     }
 }, { passive: false });
 
 viewport.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) initialPinchDistance = null;
-    if (e.touches.length === 0) isPanning = false;
+    if (e.touches.length < 2) {
+        initialPinchDistance = 0;
+    }
+    if (e.touches.length === 0) {
+        isPanning = false;
+    }
 });
 
-// --- MOUSE WHEEL ZOOM (CURSOR ODAKLI) ---
+
+/* --- MOUSE WHEEL ZOOM (PC) --- */
 viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomIntensity = 0.1;
     const direction = e.deltaY > 0 ? -1 : 1;
     const factor = 1 + (direction * zoomIntensity);
-
+    
     const oldScale = scale;
     let newScale = scale * factor;
     newScale = Math.max(0.1, Math.min(newScale, 5));
 
-    // Mouse'un container içindeki göreli konumu
     const mouseX = (e.clientX - pointX) / oldScale;
     const mouseY = (e.clientY - pointY) / oldScale;
 
-    // Yeni pozisyonu mouse noktasına göre ayarla
     pointX = e.clientX - mouseX * newScale;
     pointY = e.clientY - mouseY * newScale;
-
+    
     scale = newScale;
     setTransform();
 }, { passive: false });
 
-// --- ZOOM BUTONLARI ---
-function zoomIn() { scale *= 1.2; setTransform(); }
-function zoomOut() { scale /= 1.2; setTransform(); }
-function fitView() {
-    // Ekrana sığdır
-    scale = Math.min(window.innerWidth / 2000, window.innerHeight / 1200);
-    if (window.innerWidth < 768) scale = Math.max(scale, 0.4); // Mobilde çok küçülmesin
 
+/* --- ZOOM BUTONLARI --- */
+function zoomIn() { 
+    // Merkezden zoom
+    const centerX = viewport.offsetWidth / 2;
+    const centerY = viewport.offsetHeight / 2;
+    const imgX = (centerX - pointX) / scale;
+    const imgY = (centerY - pointY) / scale;
+    
+    scale *= 1.2;
+    scale = Math.min(scale, 5);
+    
+    pointX = centerX - imgX * scale;
+    pointY = centerY - imgY * scale;
+    setTransform(); 
+}
+
+function zoomOut() { 
+    const centerX = viewport.offsetWidth / 2;
+    const centerY = viewport.offsetHeight / 2;
+    const imgX = (centerX - pointX) / scale;
+    const imgY = (centerY - pointY) / scale;
+
+    scale /= 1.2;
+    scale = Math.max(scale, 0.2);
+    
+    pointX = centerX - imgX * scale;
+    pointY = centerY - imgY * scale;
+    setTransform(); 
+}
+
+function fitView() { 
+    scale = Math.min(window.innerWidth / 2000, window.innerHeight / 1200);
+    if(window.innerWidth < 768) scale = Math.max(scale, 0.4);
+    
     const vw = viewport.offsetWidth;
     const vh = viewport.offsetHeight;
     pointX = (vw - 1920 * scale) / 2;
     pointY = (vh - 1080 * scale) / 2;
-    setTransform();
+    setTransform(); 
 }
 
 // Buton Eventleri
@@ -181,28 +253,24 @@ window.addEventListener('resize', fitView);
 window.addEventListener('load', fitView);
 
 
-// =================================================================
-// 3. SVG & SİMÜLASYON YÖNETİMİ
-// =================================================================
+/* =================================================================
+   3. SİMÜLASYON YÖNETİMİ
+   ================================================================= */
 const svgObject = document.getElementById('svgObject');
 
 svgObject.addEventListener('load', () => {
     svgDoc = svgObject.contentDocument;
-
-    // SVG içine CSS enjekte et (Sadece Kabloları Boya)
+    
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = `
-        /* Sadece wire_, line_, vector_ ile başlayanlar animasyonlu olacak */
         .active-wire {
-            stroke: #0ea5e9 !important; /* Sky Blue */
+            stroke: #0ea5e9 !important;
             stroke-width: 5px !important;
-            stroke-dasharray: 15, 10; /* Kesik çizgi */
+            stroke-dasharray: 15, 10;
             stroke-linecap: round;
             animation: flow 0.8s linear infinite;
             opacity: 1 !important;
         }
-        
-        /* Akış Animasyonu */
         @keyframes flow { to { stroke-dashoffset: -25; } }
     `;
     svgDoc.documentElement.appendChild(style);
@@ -211,7 +279,6 @@ svgObject.addEventListener('load', () => {
 function updateSim() {
     if (!svgDoc) return;
 
-    // Temizle
     svgDoc.querySelectorAll('.active-wire').forEach(el => {
         el.classList.remove('active-wire');
     });
@@ -225,13 +292,12 @@ function updateSim() {
     document.getElementById('currentStageText').innerText = STAGE_NAMES[stageKey];
 
     const activeIDs = MIPS_LOGIC[currentInstruction].stages[stageKey];
-
+    
     if (activeIDs) {
         activeIDs.forEach(id => {
             const el = svgDoc.getElementById(id);
             if (el) {
                 const lowerId = id.toLowerCase();
-                // Sadece Wire/Line/Vector olanları boya
                 if (lowerId.startsWith('wire') || lowerId.startsWith('line') || lowerId.startsWith('vector')) {
                     el.classList.add('active-wire');
                 }
@@ -240,7 +306,6 @@ function updateSim() {
     }
 }
 
-// Simülasyon Butonları
 const btnNext = document.getElementById('btnNext');
 const btnPrev = document.getElementById('btnPrev');
 const selInst = document.getElementById('instructionSelect');
@@ -281,20 +346,20 @@ document.getElementById('btnReset').addEventListener('click', () => {
     btnNext.disabled = true;
     btnPrev.disabled = true;
     updateSim();
-    //fitView();
+    fitView(); 
 });
 
 
-// =================================================================
-// 4. PANEL GİZLEME / AÇMA (TOGGLE)
-// =================================================================
+/* =================================================================
+   4. PANEL GİZLEME / AÇMA (TOGGLE)
+   ================================================================= */
 const panel = document.getElementById('controlPanel');
 const toggleBtn = document.getElementById('togglePanelBtn');
 let isPanelOpen = true;
 
 toggleBtn.addEventListener('click', () => {
     isPanelOpen = !isPanelOpen;
-
+    
     if (isPanelOpen) {
         panel.classList.remove('minimized');
         toggleBtn.innerHTML = "▼";
